@@ -1,0 +1,59 @@
+{
+  "name": "md-to-pdf-mcp",
+  "version": "1.1.0",
+  "description": "MCP Server for converting Markdown documents to beautifully styled PDF files with Mermaid diagram support",
+  "main": "build/index.js",
+  "bin": {
+    "md-to-pdf-mcp": "build/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "markdown",
+    "pdf",
+    "converter",
+    "model-context-protocol",
+    "document",
+    "export",
+    "mermaid",
+    "diagrams",
+    "flowchart",
+    "cursor",
+    "claude",
+    "ai"
+  ],
+  "author": "ankitagarwalpro",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ankitpro/md-to-pdf-mcp.git"
+  },
+  "homepage": "https://github.com/ankitpro/md-to-pdf-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/ankitpro/md-to-pdf-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "highlight.js": "^11.10.0",
+    "marked": "^15.0.0",
+    "puppeteer": "^23.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
