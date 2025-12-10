@@ -48,7 +48,7 @@ const PAPER_FORMATS: PaperFormat[] = [
 const server = new Server(
   {
     name: "md-to-pdf-mcp",
-    version: "1.2.0",
+    version: "1.3.0",
   },
   {
     capabilities: {
@@ -129,6 +129,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 "Optional custom CSS to apply to the PDF. Will be injected after default styles, allowing you to override or extend the styling.",
             },
+            skipPreprocessing: {
+              type: "boolean",
+              description:
+                "Skip automatic markdown preprocessing and validation. By default, the tool fixes common formatting issues (e.g., spaces in bold/italic markers). Set to true to disable this.",
+            },
           },
           required: ["markdown"],
         },
@@ -159,6 +164,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     footerText?: string;
     codeTheme?: string;
     customCss?: string;
+    skipPreprocessing?: boolean;
   };
 
   // Validate required parameters
@@ -239,6 +245,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       footerText: args.footerText,
       codeTheme: codeTheme as "light" | "dark",
       customCss: args.customCss,
+      skipPreprocessing: args.skipPreprocessing ?? false,
     });
 
     if (!result.success) {
@@ -283,6 +290,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (args.showPageNumbers) {
       successMessage.push(`🔢 **Page Numbers:** Enabled`);
+    }
+
+    // Add preprocessing results
+    if (result.preprocessingFixes && result.preprocessingFixes.length > 0) {
+      successMessage.push(``);
+      successMessage.push(`🔧 **Markdown Fixes Applied:**`);
+      result.preprocessingFixes.forEach(fix => {
+        successMessage.push(`   • ${fix}`);
+      });
+    }
+
+    if (result.preprocessingWarnings && result.preprocessingWarnings.length > 0) {
+      successMessage.push(``);
+      successMessage.push(`⚠️ **Warnings:**`);
+      result.preprocessingWarnings.forEach(warning => {
+        successMessage.push(`   • ${warning}`);
+      });
     }
 
     return {

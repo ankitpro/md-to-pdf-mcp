@@ -8,6 +8,7 @@ import puppeteer, { Browser, PaperFormat } from "puppeteer";
 import { Marked } from "marked";
 import hljs from "highlight.js";
 import { getStyles, getMermaidStyles } from "./styles.js";
+import { preprocessMarkdown } from "./preprocessor.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -24,6 +25,7 @@ export interface ConvertOptions {
   footerText?: string;
   codeTheme?: "light" | "dark";
   customCss?: string;
+  skipPreprocessing?: boolean;
 }
 
 export interface ConvertResult {
@@ -34,6 +36,8 @@ export interface ConvertResult {
   lineCount?: number;
   processingTimeMs?: number;
   hasMermaidDiagrams?: boolean;
+  preprocessingFixes?: string[];
+  preprocessingWarnings?: string[];
   error?: string;
 }
 
@@ -94,7 +98,7 @@ export async function convertMarkdownToPdf(
   options: ConvertOptions
 ): Promise<ConvertResult> {
   const {
-    markdown,
+    markdown: rawMarkdown,
     outputPath,
     paperFormat = "letter",
     paperOrientation = "portrait",
@@ -106,6 +110,7 @@ export async function convertMarkdownToPdf(
     footerText,
     codeTheme = "light",
     customCss,
+    skipPreprocessing = false,
   } = options;
 
   let browser: Browser | null = null;
@@ -113,12 +118,24 @@ export async function convertMarkdownToPdf(
 
   try {
     // Validate input
-    if (!markdown || markdown.trim().length === 0) {
+    if (!rawMarkdown || rawMarkdown.trim().length === 0) {
       return {
         success: false,
         outputPath,
         error: "Markdown content is empty",
       };
+    }
+
+    // Preprocess markdown to fix formatting issues
+    let markdown = rawMarkdown;
+    let preprocessingFixes: string[] = [];
+    let preprocessingWarnings: string[] = [];
+    
+    if (!skipPreprocessing) {
+      const preprocessResult = preprocessMarkdown(rawMarkdown);
+      markdown = preprocessResult.markdown;
+      preprocessingFixes = preprocessResult.fixes;
+      preprocessingWarnings = preprocessResult.warnings;
     }
 
     // Check file size (10MB limit)
@@ -274,6 +291,8 @@ export async function convertMarkdownToPdf(
       lineCount,
       processingTimeMs,
       hasMermaidDiagrams: containsMermaid,
+      preprocessingFixes,
+      preprocessingWarnings,
     };
   } catch (error) {
     const errorMessage =

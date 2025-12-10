@@ -57,6 +57,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 - 🎨 **Beautiful Typography** - Modern serif fonts with excellent readability
 - 💻 **Syntax Highlighting** - Code blocks with syntax highlighting via highlight.js
 - 📊 **Mermaid Diagrams** - Full support for flowcharts, sequence diagrams, Gantt charts, and more
+- 🔧 **Automatic Formatting Fixes** - Automatically fixes common markdown formatting issues (bold, italic, spacing)
 - 📐 **Flexible Paper Sizes** - Support for Letter, A4, Legal, and more
 - 💧 **Watermarks** - Optional watermark text on all pages or first page only
 - 🔢 **Page Numbers** - Optional page numbering in footer
@@ -214,6 +215,7 @@ npm run build
 | `footerText` | string | ❌ | - | Text for page footer |
 | `codeTheme` | string | ❌ | `light` | light or dark code theme |
 | `customCss` | string | ❌ | - | Custom CSS to apply to PDF |
+| `skipPreprocessing` | boolean | ❌ | `false` | Skip automatic markdown formatting fixes |
 
 ## ⚙️ Environment Variables
 
@@ -238,6 +240,29 @@ npm run build
   }
 }
 ```
+
+## 🔧 Automatic Markdown Preprocessing
+
+The tool automatically fixes common markdown formatting issues before conversion:
+
+### Fixes Applied Automatically
+
+- **Bold Text** - Removes extra spaces in `** text **` → `**text**`
+- **Italic Text** - Removes extra spaces in `* text *` → `*text*`
+- **Strikethrough** - Removes extra spaces in `~~ text ~~` → `~~text~~`
+- **Inline Code** - Fixes spacing in backtick markers
+- **Header Spacing** - Ensures proper blank lines before headers
+- **Code Blocks** - Ensures proper spacing around code blocks
+- **Excessive Blank Lines** - Reduces multiple consecutive blank lines
+
+### Validation & Warnings
+
+The preprocessor also validates your markdown and warns you about:
+- Unbalanced formatting markers (unclosed bold, italic, etc.)
+- Very long lines that might need breaking
+- Nested formatting that might render unexpectedly
+
+To disable preprocessing (not recommended), set `skipPreprocessing: true`.
 
 ## 📏 Supported Paper Formats
 

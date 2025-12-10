@@ -1,0 +1,191 @@
+/**
+ * Markdown Preprocessor
+ * Validates and fixes common markdown formatting issues before conversion
+ */
+
+export interface PreprocessResult {
+  markdown: string;
+  fixes: string[];
+  warnings: string[];
+}
+
+/**
+ * Preprocess markdown to fix common formatting issues
+ */
+export function preprocessMarkdown(markdown: string): PreprocessResult {
+  const fixes: string[] = [];
+  const warnings: string[] = [];
+  let processed = markdown;
+
+  // Fix 1: Normalize bold formatting (**text** or __text__)
+  // Remove spaces immediately after opening markers and before closing markers
+  const originalBold = processed;
+  processed = processed.replace(/\*\*\s+([^\*]+?)\s+\*\*/g, (match, content) => {
+    fixes.push(`Fixed bold formatting with extra spaces: "${match.trim()}"`);
+    return `**${content.trim()}**`;
+  });
+  processed = processed.replace(/__\s+([^_]+?)\s+__/g, (match, content) => {
+    fixes.push(`Fixed bold formatting with extra spaces: "${match.trim()}"`);
+    return `__${content.trim()}__`;
+  });
+
+  // Fix bold with only leading space
+  processed = processed.replace(/\*\*\s+([^\*]+?)\*\*/g, (match, content) => {
+    if (!fixes.includes(`Fixed bold formatting with extra spaces: "${match.trim()}"`)) {
+      fixes.push(`Fixed bold formatting with leading space: "${match.trim()}"`);
+    }
+    return `**${content.trim()}**`;
+  });
+  
+  // Fix bold with only trailing space
+  processed = processed.replace(/\*\*([^\*]+?)\s+\*\*/g, (match, content) => {
+    if (!fixes.includes(`Fixed bold formatting with extra spaces: "${match.trim()}"`)) {
+      fixes.push(`Fixed bold formatting with trailing space: "${match.trim()}"`);
+    }
+    return `**${content.trim()}**`;
+  });
+
+  // Fix 2: Normalize italic formatting (*text* or _text_)
+  // Remove spaces immediately after opening markers and before closing markers
+  processed = processed.replace(/(?<!\*)\*\s+([^\*]+?)\s+\*(?!\*)/g, (match, content) => {
+    fixes.push(`Fixed italic formatting with extra spaces: "${match.trim()}"`);
+    return `*${content.trim()}*`;
+  });
+  processed = processed.replace(/(?<!_)_\s+([^_]+?)\s+_(?!_)/g, (match, content) => {
+    fixes.push(`Fixed italic formatting with extra spaces: "${match.trim()}"`);
+    return `_${content.trim()}_`;
+  });
+
+  // Fix italic with only leading space
+  processed = processed.replace(/(?<!\*)\*\s+([^\*]+?)\*(?!\*)/g, (match, content) => {
+    if (!fixes.some(f => f.includes(match.trim()))) {
+      fixes.push(`Fixed italic formatting with leading space: "${match.trim()}"`);
+    }
+    return `*${content.trim()}*`;
+  });
+  
+  // Fix italic with only trailing space
+  processed = processed.replace(/(?<!\*)\*([^\*]+?)\s+\*(?!\*)/g, (match, content) => {
+    if (!fixes.some(f => f.includes(match.trim()))) {
+      fixes.push(`Fixed italic formatting with trailing space: "${match.trim()}"`);
+    }
+    return `*${content.trim()}*`;
+  });
+
+  // Fix 3: Normalize strikethrough formatting (~~text~~)
+  processed = processed.replace(/~~\s+([^~]+?)\s+~~/g, (match, content) => {
+    fixes.push(`Fixed strikethrough formatting with extra spaces: "${match.trim()}"`);
+    return `~~${content.trim()}~~`;
+  });
+
+  // Fix 4: Normalize inline code formatting (`text`)
+  // Only fix if there are spaces AND the content is not intentionally spaced
+  processed = processed.replace(/`\s+([^`]+?)\s+`/g, (match, content) => {
+    // Check if the content has intentional spacing (e.g., command with args)
+    if (content.trim().includes(' ')) {
+      return match; // Keep as is if content has spaces
+    }
+    fixes.push(`Fixed inline code formatting with extra spaces: "${match}"`);
+    return `\`${content.trim()}\``;
+  });
+
+  // Fix 5: Ensure proper spacing around headers
+  const lines = processed.split('\n');
+  const fixedLines: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+    
+    // Check if it's a header
+    if (/^#{1,6}\s+.+/.test(trimmedLine)) {
+      // Ensure there's blank line before header (unless it's the first line)
+      if (i > 0 && fixedLines[fixedLines.length - 1].trim() !== '') {
+        fixedLines.push('');
+        fixes.push(`Added blank line before header: "${trimmedLine.substring(0, 30)}..."`);
+      }
+      fixedLines.push(line);
+    } else {
+      fixedLines.push(line);
+    }
+  }
+  
+  processed = fixedLines.join('\n');
+
+  // Fix 6: Remove excessive blank lines (more than 2 consecutive)
+  const originalLineCount = processed.split('\n').length;
+  processed = processed.replace(/\n{4,}/g, '\n\n\n');
+  if (processed.split('\n').length !== originalLineCount) {
+    fixes.push('Removed excessive blank lines (reduced to max 2 consecutive)');
+  }
+
+  // Fix 7: Ensure code blocks have proper spacing
+  processed = processed.replace(/([^\n])\n```/g, (match, before) => {
+    fixes.push('Added blank line before code block');
+    return `${before}\n\n\`\`\``;
+  });
+  processed = processed.replace(/```\n([^\n])/g, (match, after) => {
+    fixes.push('Added blank line after code block');
+    return `\`\`\`\n\n${after}`;
+  });
+
+  // Fix 8: Normalize list formatting
+  // Ensure proper spacing in unordered lists
+  processed = processed.replace(/^([*+-])\s{2,}/gm, '$1 ');
+  
+  // Warnings: Detect potential issues that can't be auto-fixed
+  
+  // Warn about unclosed bold markers
+  const boldOpeners = (processed.match(/\*\*/g) || []).length;
+  if (boldOpeners % 2 !== 0) {
+    warnings.push('⚠️  Unbalanced bold markers (**) detected. Please check your markdown.');
+  }
+  
+  // Warn about unclosed italic markers
+  const italicOpeners = (processed.match(/(?<!\*)\*(?!\*)/g) || []).length;
+  if (italicOpeners % 2 !== 0) {
+    warnings.push('⚠️  Unbalanced italic markers (*) detected. Please check your markdown.');
+  }
+  
+  // Warn about unclosed code markers
+  const codeOpeners = (processed.match(/`/g) || []).length;
+  if (codeOpeners % 2 !== 0) {
+    warnings.push('⚠️  Unbalanced inline code markers (`) detected. Please check your markdown.');
+  }
+
+  // Warn about potential escaped markers that might be intended
+  if (processed.includes('\\*\\*') || processed.includes('\\*')) {
+    warnings.push('ℹ️  Escaped formatting markers detected. If you want actual formatting, remove the backslashes.');
+  }
+
+  return {
+    markdown: processed,
+    fixes,
+    warnings,
+  };
+}
+
+/**
+ * Validate markdown for common issues
+ */
+export function validateMarkdown(markdown: string): string[] {
+  const issues: string[] = [];
+  
+  // Check for extremely long lines (potential formatting issue)
+  const lines = markdown.split('\n');
+  lines.forEach((line, index) => {
+    if (line.length > 500 && !line.startsWith('```')) {
+      issues.push(`Line ${index + 1} is very long (${line.length} chars). Consider adding line breaks.`);
+    }
+  });
+  
+  // Check for nested formatting (can cause rendering issues)
+  if (/\*\*[^*]*\*[^*]*\*[^*]*\*\*/.test(markdown)) {
+    issues.push('Nested bold and italic formatting detected. This may render unexpectedly.');
+  }
+  
+  return issues;
+}
+
+export default preprocessMarkdown;
+
