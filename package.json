@@ -1,6 +1,6 @@
 {
   "name": "md-to-pdf-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "MCP Server for converting Markdown documents to beautifully styled PDF files with Mermaid diagram support",
   "main": "build/index.js",
   "bin": {

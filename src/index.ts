@@ -48,7 +48,7 @@ const PAPER_FORMATS: PaperFormat[] = [
 const server = new Server(
   {
     name: "md-to-pdf-mcp",
-    version: "1.1.0",
+    version: "1.2.0",
   },
   {
     capabilities: {
@@ -124,6 +124,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 "Color theme for code blocks and Mermaid diagrams. Defaults to 'light'",
             },
+            customCss: {
+              type: "string",
+              description:
+                "Optional custom CSS to apply to the PDF. Will be injected after default styles, allowing you to override or extend the styling.",
+            },
           },
           required: ["markdown"],
         },
@@ -153,6 +158,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     headerText?: string;
     footerText?: string;
     codeTheme?: string;
+    customCss?: string;
   };
 
   // Validate required parameters
@@ -232,6 +238,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       headerText: args.headerText,
       footerText: args.footerText,
       codeTheme: codeTheme as "light" | "dark",
+      customCss: args.customCss,
     });
 
     if (!result.success) {

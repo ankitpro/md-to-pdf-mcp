@@ -23,6 +23,7 @@ export interface ConvertOptions {
   headerText?: string;
   footerText?: string;
   codeTheme?: "light" | "dark";
+  customCss?: string;
 }
 
 export interface ConvertResult {
@@ -104,6 +105,7 @@ export async function convertMarkdownToPdf(
     headerText,
     footerText,
     codeTheme = "light",
+    customCss,
   } = options;
 
   let browser: Browser | null = null;
@@ -147,6 +149,7 @@ export async function convertMarkdownToPdf(
       watermarkScope,
       codeTheme,
       includeMermaid: containsMermaid,
+      customCss,
     });
 
     // Calculate timeout based on content size (dynamic scaling)
@@ -298,6 +301,7 @@ function generateHtmlDocument(
     watermarkScope?: "all-pages" | "first-page";
     codeTheme?: "light" | "dark";
     includeMermaid?: boolean;
+    customCss?: string;
   }
 ): string {
   const {
@@ -305,6 +309,7 @@ function generateHtmlDocument(
     watermarkScope = "all-pages",
     codeTheme = "light",
     includeMermaid = false,
+    customCss,
   } = options;
 
   const styles = getStyles({ codeTheme });
@@ -357,6 +362,7 @@ function generateHtmlDocument(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>${styles}</style>
   ${mermaidStyles ? `<style>${mermaidStyles}</style>` : ""}
+  ${customCss ? `<style>/* Custom User CSS */\n${customCss}</style>` : ""}
   ${watermarkScope === "first-page" ? `
   <style>
     .watermark.first-page-only {

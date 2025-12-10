@@ -62,6 +62,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 - 🔢 **Page Numbers** - Optional page numbering in footer
 - 📑 **Headers & Footers** - Custom header and footer text
 - 🌙 **Code Themes** - Light and dark themes for code blocks
+- 🎨 **Custom CSS Styling** - Inject your own CSS for complete customization
 - 🚀 **Large File Support** - 4GB memory allocation with dynamic timeouts
 
 ## 📊 Mermaid Diagram Support
@@ -138,6 +139,22 @@ Content:
 ...
 ```
 
+### Custom Styling
+
+```
+Generate a PDF with custom CSS styling:
+
+Content:
+# Styled Document
+
+Custom CSS:
+```css
+h1 { color: #2c3e50; border-bottom: 3px solid #3498db; }
+p { font-size: 12pt; line-height: 1.8; }
+code { background: #fffacd; color: #d63384; }
+```
+```
+
 ---
 
 ## 📖 Supported Markdown Features
@@ -196,6 +213,7 @@ npm run build
 | `headerText` | string | ❌ | - | Text for page header |
 | `footerText` | string | ❌ | - | Text for page footer |
 | `codeTheme` | string | ❌ | `light` | light or dark code theme |
+| `customCss` | string | ❌ | - | Custom CSS to apply to PDF |
 
 ## ⚙️ Environment Variables
 
