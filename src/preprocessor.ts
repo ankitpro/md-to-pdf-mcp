@@ -17,6 +17,18 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   const warnings: string[] = [];
   let processed = markdown;
 
+  // Fix 0: Handle escaped asterisks that should be formatting
+  // Remove backslash escapes from formatting markers if they appear to be bold/italic intent
+  const escapedBoldPattern = /\\?\*\\?\*\s*([^*]+?)\s*\\?\*\\?\*/g;
+  processed = processed.replace(escapedBoldPattern, (match, content) => {
+    // Check if this looks like it should be bold (has escaped asterisks)
+    if (match.includes('\\*')) {
+      fixes.push(`Fixed escaped bold markers: "${match}" → "**${content.trim()}**"`);
+      return `**${content.trim()}**`;
+    }
+    return match;
+  });
+
   // Fix 1: Normalize bold formatting (**text** or __text__)
   // Remove spaces immediately after opening markers and before closing markers
   const originalBold = processed;
@@ -31,7 +43,7 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
 
   // Fix bold with only leading space
   processed = processed.replace(/\*\*\s+([^\*]+?)\*\*/g, (match, content) => {
-    if (!fixes.includes(`Fixed bold formatting with extra spaces: "${match.trim()}"`)) {
+    if (!fixes.some(f => f.includes(content.trim()))) {
       fixes.push(`Fixed bold formatting with leading space: "${match.trim()}"`);
     }
     return `**${content.trim()}**`;
@@ -39,7 +51,7 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   
   // Fix bold with only trailing space
   processed = processed.replace(/\*\*([^\*]+?)\s+\*\*/g, (match, content) => {
-    if (!fixes.includes(`Fixed bold formatting with extra spaces: "${match.trim()}"`)) {
+    if (!fixes.some(f => f.includes(content.trim()))) {
       fixes.push(`Fixed bold formatting with trailing space: "${match.trim()}"`);
     }
     return `**${content.trim()}**`;
@@ -119,17 +131,55 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
     fixes.push('Removed excessive blank lines (reduced to max 2 consecutive)');
   }
 
-  // Fix 7: Ensure code blocks have proper spacing
+  // Fix 7: Handle literal asterisks in text (outside code blocks)
+  // This catches patterns like "**text**" that appear in normal text but aren't being rendered
+  // Split by code blocks to avoid modifying code
+  const codeBlockPattern = /```[\s\S]*?```|`[^`]+`/g;
+  const codeBlocks: string[] = [];
+  let codeBlockIndex = 0;
+  
+  // Temporarily replace code blocks with placeholders
+  const withoutCodeBlocks = processed.replace(codeBlockPattern, (match) => {
+    codeBlocks.push(match);
+    return `__CODEBLOCK_${codeBlockIndex++}__`;
+  });
+  
+  // Now fix any remaining literal asterisks patterns that should be formatting
+  // This handles cases where markdown isn't being parsed correctly
+  let fixedText = withoutCodeBlocks;
+  
+  // Check for patterns that look like they should be bold but might not be rendering
+  // Only if they're not already HTML tags
+  const literalBoldPattern = /(?<!<[^>]*)(\*\*[A-Za-z][^*\n]{1,50}?\*\*)(?![^<]*>)/g;
+  fixedText = fixedText.replace(literalBoldPattern, (match) => {
+    // Check if this is already being processed by markdown (has proper spacing)
+    if (/^\*\*[^\s*].*[^\s*]\*\*$/.test(match)) {
+      // It's properly formatted, leave it alone
+      return match;
+    }
+    return match;
+  });
+  
+  // Restore code blocks
+  processed = fixedText.replace(/__CODEBLOCK_(\d+)__/g, (match, index) => {
+    return codeBlocks[parseInt(index)];
+  });
+
+  // Fix 8: Ensure code blocks have proper spacing
   processed = processed.replace(/([^\n])\n```/g, (match, before) => {
-    fixes.push('Added blank line before code block');
+    if (!fixes.includes('Added blank line before code block')) {
+      fixes.push('Added blank line before code block');
+    }
     return `${before}\n\n\`\`\``;
   });
   processed = processed.replace(/```\n([^\n])/g, (match, after) => {
-    fixes.push('Added blank line after code block');
+    if (!fixes.includes('Added blank line after code block')) {
+      fixes.push('Added blank line after code block');
+    }
     return `\`\`\`\n\n${after}`;
   });
 
-  // Fix 8: Normalize list formatting
+  // Fix 9: Normalize list formatting
   // Ensure proper spacing in unordered lists
   processed = processed.replace(/^([*+-])\s{2,}/gm, '$1 ');
   

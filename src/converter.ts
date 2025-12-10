@@ -81,6 +81,14 @@ marked.use({
       }
       return `<li>${token.text}</li>\n`;
     },
+    // Ensure proper strong (bold) rendering
+    strong(token) {
+      return `<strong>${token.text}</strong>`;
+    },
+    // Ensure proper em (italic) rendering
+    em(token) {
+      return `<em>${token.text}</em>`;
+    },
   },
 });
 
@@ -89,6 +97,36 @@ marked.use({
  */
 function hasMermaidDiagrams(markdown: string): boolean {
   return /```mermaid/i.test(markdown);
+}
+
+/**
+ * Post-process HTML to fix any remaining literal markdown markers
+ * This is a safety net for cases where markdown parsing didn't work correctly
+ */
+function postProcessHtml(html: string): string {
+  let processed = html;
+  
+  // Fix literal **bold** markers that weren't converted to <strong> tags
+  // Only match patterns outside of <code>, <pre>, and existing <strong> tags
+  processed = processed.replace(
+    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)(?<!<strong>)\*\*([^\*\n<>]{1,100}?)\*\*(?!<\/strong>)(?!.*?<\/code>)(?!.*?<\/pre>)/g,
+    '<strong>$1</strong>'
+  );
+  
+  // Fix literal *italic* markers that weren't converted to <em> tags
+  // Be careful not to match ** or list markers
+  processed = processed.replace(
+    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)(?<!<em>)(?<!\*)\*([^\*\n<>]{1,100}?)\*(?!\*)(?!<\/em>)(?!.*?<\/code>)(?!.*?<\/pre>)/g,
+    '<em>$1</em>'
+  );
+  
+  // Fix literal ~~strikethrough~~ markers
+  processed = processed.replace(
+    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)~~([^~\n<>]{1,100}?)~~(?!.*?<\/code>)(?!.*?<\/pre>)/g,
+    '<del>$1</del>'
+  );
+  
+  return processed;
 }
 
 /**
@@ -158,7 +196,11 @@ export async function convertMarkdownToPdf(
     }
 
     // Convert markdown to HTML
-    const htmlContent = await marked.parse(markdown);
+    let htmlContent = await marked.parse(markdown);
+
+    // Post-process HTML to fix any remaining literal markdown markers
+    // This catches cases where markdown parsing might have failed
+    htmlContent = postProcessHtml(htmlContent);
 
     // Generate full HTML document
     const fullHtml = generateHtmlDocument(htmlContent, {

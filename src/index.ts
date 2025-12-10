@@ -48,7 +48,7 @@ const PAPER_FORMATS: PaperFormat[] = [
 const server = new Server(
   {
     name: "md-to-pdf-mcp",
-    version: "1.3.0",
+    version: "1.3.1",
   },
   {
     capabilities: {

@@ -242,6 +242,15 @@ dd {
   margin-bottom: 0.4em;
 }
 
+/* Bold and Italic */
+strong, b {
+  font-weight: 600;
+}
+
+em, i {
+  font-style: italic;
+}
+
 /* Highlighting */
 mark {
   background: #fff3cd;
