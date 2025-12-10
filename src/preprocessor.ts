@@ -34,39 +34,27 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   // Remove spaces immediately after opening markers and before closing markers
   const originalBold = processed;
   
-  // First, protect URLs and links from bold processing
-  const urlPattern = /\*\*(https?:\/\/[^\*]+)\*\*/g;
+  // First, fix bold URLs by removing the bold markers
+  // URLs should not be bold, especially in headings
+  processed = processed.replace(/\*\*(https?:\/\/[^\*\s]+)\*\*/g, '$1');
+  
+  // Track if we fixed any bold URLs
+  if (processed !== originalBold) {
+    fixes.push('Removed bold formatting from URLs');
+  }
+  
+  // Then protect URLs from further processing
+  const urlPattern = /(https?:\/\/[^\s*]+)/g;
   const protectedUrls: string[] = [];
   let urlIndex = 0;
-  processed = processed.replace(urlPattern, (match, url) => {
+  processed = processed.replace(urlPattern, (match) => {
     protectedUrls.push(match);
     return `__URL_PLACEHOLDER_${urlIndex++}__`;
   });
   
-  processed = processed.replace(/\*\*\s+([^\*]+?)\s+\*\*/g, (match, content) => {
-    fixes.push(`Fixed bold formatting with extra spaces: "${match.trim()}"`);
-    return `**${content.trim()}**`;
-  });
-  processed = processed.replace(/__\s+([^_]+?)\s+__/g, (match, content) => {
-    fixes.push(`Fixed bold formatting with extra spaces: "${match.trim()}"`);
-    return `__${content.trim()}__`;
-  });
-
-  // Fix bold with only leading space
-  processed = processed.replace(/\*\*\s+([^\*]+?)\*\*/g, (match, content) => {
-    if (!fixes.some(f => f.includes(content.trim()))) {
-      fixes.push(`Fixed bold formatting with leading space: "${match.trim()}"`);
-    }
-    return `**${content.trim()}**`;
-  });
-  
-  // Fix bold with only trailing space
-  processed = processed.replace(/\*\*([^\*]+?)\s+\*\*/g, (match, content) => {
-    if (!fixes.some(f => f.includes(content.trim()))) {
-      fixes.push(`Fixed bold formatting with trailing space: "${match.trim()}"`);
-    }
-    return `**${content.trim()}**`;
-  });
+  // Disabled: These aggressive patterns were causing cross-line matching issues
+  // The marked.js parser handles most bold formatting correctly
+  // Only specific patterns (like CAUTION) are handled in Fix 11 below
   
   // Restore protected URLs
   processed = processed.replace(/__URL_PLACEHOLDER_(\d+)__/g, (match, index) => {
@@ -74,35 +62,24 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   });
 
   // Fix 2: Normalize italic formatting (*text* or _text_)
-  // Remove spaces immediately after opening markers and before closing markers
-  processed = processed.replace(/(?<!\*)\*\s+([^\*]+?)\s+\*(?!\*)/g, (match, content) => {
-    fixes.push(`Fixed italic formatting with extra spaces: "${match.trim()}"`);
+  // Only match within single line
+  processed = processed.replace(/(?<!\*)\* +([^*\n]+?) +\*(?!\*)/g, (match, content) => {
+    fixes.push(`Fixed italic formatting with spaces: "${content}"`);
     return `*${content.trim()}*`;
   });
-  processed = processed.replace(/(?<!_)_\s+([^_]+?)\s+_(?!_)/g, (match, content) => {
-    fixes.push(`Fixed italic formatting with extra spaces: "${match.trim()}"`);
-    return `_${content.trim()}_`;
-  });
-
-  // Fix italic with only leading space
-  processed = processed.replace(/(?<!\*)\*\s+([^\*]+?)\*(?!\*)/g, (match, content) => {
-    if (!fixes.some(f => f.includes(match.trim()))) {
-      fixes.push(`Fixed italic formatting with leading space: "${match.trim()}"`);
-    }
+  processed = processed.replace(/(?<!\*)\* +([^*\n]+?)\*(?!\*)/g, (match, content) => {
+    fixes.push(`Fixed italic formatting with leading space: "${content}"`);
     return `*${content.trim()}*`;
   });
-  
-  // Fix italic with only trailing space
-  processed = processed.replace(/(?<!\*)\*([^\*]+?)\s+\*(?!\*)/g, (match, content) => {
-    if (!fixes.some(f => f.includes(match.trim()))) {
-      fixes.push(`Fixed italic formatting with trailing space: "${match.trim()}"`);
-    }
+  processed = processed.replace(/(?<!\*)\*([^*\n]+?) +\*(?!\*)/g, (match, content) => {
+    fixes.push(`Fixed italic formatting with trailing space: "${content}"`);
     return `*${content.trim()}*`;
   });
 
   // Fix 3: Normalize strikethrough formatting (~~text~~)
-  processed = processed.replace(/~~\s+([^~]+?)\s+~~/g, (match, content) => {
-    fixes.push(`Fixed strikethrough formatting with extra spaces: "${match.trim()}"`);
+  // Only match within single line
+  processed = processed.replace(/~~ +([^~\n]+?) +~~/g, (match, content) => {
+    fixes.push(`Fixed strikethrough formatting with spaces: "${content}"`);
     return `~~${content.trim()}~~`;
   });
 
@@ -120,13 +97,17 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   // Fix 5: Ensure proper spacing around headers and fix nested headers
   const lines = processed.split('\n');
   const fixedLines: string[] = [];
+  let lastHeaderLevel = 0;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmedLine = line.trim();
     
     // Check if it's a header
-    if (/^#{1,6}\s+.+/.test(trimmedLine)) {
+    const headerMatch = trimmedLine.match(/^(#{1,6})\s+.+/);
+    if (headerMatch) {
+      const currentLevel = headerMatch[1].length;
+      
       // Ensure there's blank line before header (unless it's the first line)
       if (i > 0 && fixedLines[fixedLines.length - 1].trim() !== '') {
         fixedLines.push('');
@@ -135,20 +116,21 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
         }
       }
       
-      // Check if this looks like a nested header inside another header
-      // e.g., "## Heading\n### SubHeading" on same logical line
-      const prevLine = fixedLines[fixedLines.length - 1] || '';
-      if (prevLine.match(/^#{1,6}\s+/) && !prevLine.includes('\n\n')) {
-        // Previous line was also a header, ensure blank line between them
-        if (prevLine.trim() !== '') {
-          fixedLines.push('');
-          fixes.push(`Added blank line between nested headers`);
-        }
+      // Check for improper heading hierarchy (e.g., h1 → h3 without h2)
+      if (lastHeaderLevel > 0 && currentLevel > lastHeaderLevel + 1) {
+        // Fix by adjusting the level to be one level deeper than previous
+        const fixedLevel = lastHeaderLevel + 1;
+        const fixedLine = '#'.repeat(fixedLevel) + trimmedLine.substring(currentLevel);
+        fixes.push(`Fixed heading hierarchy: h${currentLevel} after h${lastHeaderLevel} → h${fixedLevel}`);
+        fixedLines.push(fixedLine);
+        lastHeaderLevel = fixedLevel;
+      } else {
+        fixedLines.push(line);
+        lastHeaderLevel = currentLevel;
       }
-      
-      fixedLines.push(line);
     } else {
       fixedLines.push(line);
+      // Don't reset lastHeaderLevel to preserve hierarchy context
     }
   }
   
@@ -213,17 +195,25 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   // Look for patterns like "areofficial" or "testedand"
   processed = processed.replace(/([a-z])([A-Z])/g, '$1 $2'); // camelCase to separate words
   
-  // Fix common concatenated words
-  const commonConcatenations = [
-    [/are(official|tested|verified)/gi, 'are $1'],
-    [/(tested|verified)and/gi, '$1 and'],
-    [/reports(Internal|External)/gi, 'reports\n\n$1'],
-    [/systems\.---/g, 'systems.\n\n---'],
+  // Fix common concatenated words - be more aggressive
+  const commonConcatenations: Array<[RegExp, string]> = [
+    // "are tested" variations
+    [/\bare(tested|verified|official)/gi, 'are $1'],
+    // "tested and" variations  
+    [/\b(tested|verified)and\b/gi, '$1 and'],
+    // "Most are" variations
+    [/\bMost\s*are(official|tested)/gi, 'Most are $1'],
+    // "reports Internal" - add proper spacing and line break
+    [/\breports\s*(Internal|External)/gi, 'reports\n\n$1'],
+    // "systems.---" - add proper spacing
+    [/systems\.\s*---/g, 'systems.\n\n---'],
+    // Generic word concatenation patterns (lowercase followed by capital)
+    [/\b([a-z]{3,})([A-Z][a-z]{2,})/g, '$1 $2'],
   ];
   
   commonConcatenations.forEach(([pattern, replacement]) => {
     const before = processed;
-    processed = processed.replace(pattern, replacement as string);
+    processed = processed.replace(pattern, replacement);
     if (before !== processed) {
       fixes.push(`Fixed concatenated words: ${pattern.toString()}`);
     }
@@ -234,11 +224,20 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   processed = processed.replace(/^([*+-])\s{2,}/gm, '$1 ');
   
   // Fix 11: Ensure proper line breaks for warnings and notices
-  // Fix patterns like "⚠️ CAUTION:" to be on its own line
-  processed = processed.replace(/(⚠️|⚡|✅|❌|🔒|💡|📊|🎯)\s*([A-Z][A-Za-z\s]+:)/g, '\n$1 $2\n');
+  // Fix patterns like "- **⚠️ CAUTION:** text" in bullet lists
+  // Handle both cases: with closing ** and without (unbalanced)
   
-  // Fix patterns like "Remember:" to be bold
-  processed = processed.replace(/\n(Remember|Note|Important|Warning|Caution):\s/g, '\n**$1:**\n\n');
+  // Case 1: Properly closed bold "- **⚠️ CAUTION:** text"  
+  processed = processed.replace(/^(\s*[-*+]\s+)\*\*(⚠️|⚡|✅|❌|🔒|💡|📊|🎯)\s*([A-Z]+(?:\s+[A-Z]+)*):\*\*\s+(.+)$/gm, 
+    '$1**$2 $3:**\n  $4');
+  
+  // Case 2: Unclosed bold "- **⚠️ CAUTION: text" - add closing ** and split
+  processed = processed.replace(/^(\s*[-*+]\s+)\*\*(⚠️|⚡|✅|❌|🔒|💡|📊|🎯)\s*([A-Z]+(?:\s+[A-Z]+)*):(?!\*)\s+(.+)$/gm, 
+    '$1**$2 $3:**\n  $4');
+  
+  // Fix patterns like "Remember:" at start of line to be bold if not already
+  // Match "Remember: " but not "**Remember:**" (already bold)
+  processed = processed.replace(/^(?!\*\*)(Remember|Note|Important|Warning|Caution):\s+/gm, '**$1:** ');
   
   // Warnings: Detect potential issues that can't be auto-fixed
   
