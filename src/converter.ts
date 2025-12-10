@@ -107,24 +107,26 @@ function postProcessHtml(html: string): string {
   let processed = html;
   
   // Fix literal **bold** markers that weren't converted to <strong> tags
-  // Only match patterns outside of <code>, <pre>, and existing <strong> tags
-  processed = processed.replace(
-    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)(?<!<strong>)\*\*([^\*\n<>]{1,100}?)\*\*(?!<\/strong>)(?!.*?<\/code>)(?!.*?<\/pre>)/g,
-    '<strong>$1</strong>'
-  );
+  // But be very careful not to break URLs or links
+  // Only process if it's clearly text content, not inside links or code blocks
+  const lines = processed.split('\n');
+  const processedLines = lines.map(line => {
+    // Skip lines that contain <code>, <pre>, <a>, or already have <strong>
+    if (line.includes('<code') || line.includes('<pre') || line.includes('<a ') || line.includes('<strong>')) {
+      return line;
+    }
+    
+    // Very conservative: only fix obvious text bold markers
+    // Match **Text** where Text doesn't contain HTML or special chars
+    let processedLine = line.replace(/\*\*([A-Za-z0-9\s:!?.,]+)\*\*/g, '<strong>$1</strong>');
+    
+    return processedLine;
+  });
   
-  // Fix literal *italic* markers that weren't converted to <em> tags
-  // Be careful not to match ** or list markers
-  processed = processed.replace(
-    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)(?<!<em>)(?<!\*)\*([^\*\n<>]{1,100}?)\*(?!\*)(?!<\/em>)(?!.*?<\/code>)(?!.*?<\/pre>)/g,
-    '<em>$1</em>'
-  );
+  processed = processedLines.join('\n');
   
-  // Fix literal ~~strikethrough~~ markers
-  processed = processed.replace(
-    /(?<!<code[^>]*>.*?)(?<!<pre[^>]*>.*?)~~([^~\n<>]{1,100}?)~~(?!.*?<\/code>)(?!.*?<\/pre>)/g,
-    '<del>$1</del>'
-  );
+  // Fix literal ~~strikethrough~~ markers (also conservative)
+  processed = processed.replace(/~~([A-Za-z0-9\s:!?.,]+)~~/g, '<del>$1</del>');
   
   return processed;
 }

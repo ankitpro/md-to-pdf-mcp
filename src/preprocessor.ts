@@ -30,8 +30,19 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
   });
 
   // Fix 1: Normalize bold formatting (**text** or __text__)
+  // But preserve intentional bold markers that should remain as text (like **A:** in Q&A)
   // Remove spaces immediately after opening markers and before closing markers
   const originalBold = processed;
+  
+  // First, protect URLs and links from bold processing
+  const urlPattern = /\*\*(https?:\/\/[^\*]+)\*\*/g;
+  const protectedUrls: string[] = [];
+  let urlIndex = 0;
+  processed = processed.replace(urlPattern, (match, url) => {
+    protectedUrls.push(match);
+    return `__URL_PLACEHOLDER_${urlIndex++}__`;
+  });
+  
   processed = processed.replace(/\*\*\s+([^\*]+?)\s+\*\*/g, (match, content) => {
     fixes.push(`Fixed bold formatting with extra spaces: "${match.trim()}"`);
     return `**${content.trim()}**`;
@@ -55,6 +66,11 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
       fixes.push(`Fixed bold formatting with trailing space: "${match.trim()}"`);
     }
     return `**${content.trim()}**`;
+  });
+  
+  // Restore protected URLs
+  processed = processed.replace(/__URL_PLACEHOLDER_(\d+)__/g, (match, index) => {
+    return protectedUrls[parseInt(index)];
   });
 
   // Fix 2: Normalize italic formatting (*text* or _text_)
@@ -101,7 +117,7 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
     return `\`${content.trim()}\``;
   });
 
-  // Fix 5: Ensure proper spacing around headers
+  // Fix 5: Ensure proper spacing around headers and fix nested headers
   const lines = processed.split('\n');
   const fixedLines: string[] = [];
   
@@ -114,8 +130,22 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
       // Ensure there's blank line before header (unless it's the first line)
       if (i > 0 && fixedLines[fixedLines.length - 1].trim() !== '') {
         fixedLines.push('');
-        fixes.push(`Added blank line before header: "${trimmedLine.substring(0, 30)}..."`);
+        if (!fixes.some(f => f.includes('Added blank line before header'))) {
+          fixes.push(`Added blank line before header`);
+        }
       }
+      
+      // Check if this looks like a nested header inside another header
+      // e.g., "## Heading\n### SubHeading" on same logical line
+      const prevLine = fixedLines[fixedLines.length - 1] || '';
+      if (prevLine.match(/^#{1,6}\s+/) && !prevLine.includes('\n\n')) {
+        // Previous line was also a header, ensure blank line between them
+        if (prevLine.trim() !== '') {
+          fixedLines.push('');
+          fixes.push(`Added blank line between nested headers`);
+        }
+      }
+      
       fixedLines.push(line);
     } else {
       fixedLines.push(line);
@@ -179,9 +209,36 @@ export function preprocessMarkdown(markdown: string): PreprocessResult {
     return `\`\`\`\n\n${after}`;
   });
 
-  // Fix 9: Normalize list formatting
+  // Fix 9: Fix missing spaces between words (common OCR/paste issue)
+  // Look for patterns like "areofficial" or "testedand"
+  processed = processed.replace(/([a-z])([A-Z])/g, '$1 $2'); // camelCase to separate words
+  
+  // Fix common concatenated words
+  const commonConcatenations = [
+    [/are(official|tested|verified)/gi, 'are $1'],
+    [/(tested|verified)and/gi, '$1 and'],
+    [/reports(Internal|External)/gi, 'reports\n\n$1'],
+    [/systems\.---/g, 'systems.\n\n---'],
+  ];
+  
+  commonConcatenations.forEach(([pattern, replacement]) => {
+    const before = processed;
+    processed = processed.replace(pattern, replacement as string);
+    if (before !== processed) {
+      fixes.push(`Fixed concatenated words: ${pattern.toString()}`);
+    }
+  });
+  
+  // Fix 10: Normalize list formatting
   // Ensure proper spacing in unordered lists
   processed = processed.replace(/^([*+-])\s{2,}/gm, '$1 ');
+  
+  // Fix 11: Ensure proper line breaks for warnings and notices
+  // Fix patterns like "⚠️ CAUTION:" to be on its own line
+  processed = processed.replace(/(⚠️|⚡|✅|❌|🔒|💡|📊|🎯)\s*([A-Z][A-Za-z\s]+:)/g, '\n$1 $2\n');
+  
+  // Fix patterns like "Remember:" to be bold
+  processed = processed.replace(/\n(Remember|Note|Important|Warning|Caution):\s/g, '\n**$1:**\n\n');
   
   // Warnings: Detect potential issues that can't be auto-fixed
   
